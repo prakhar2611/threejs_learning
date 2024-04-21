@@ -4,12 +4,19 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import TWEEN from "@tweenjs/tween.js";
 import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
 import { FontLoader } from "three/addons/loaders/FontLoader.js";
+import { Howl, Howler } from 'howler'
+
+
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 import { MotionPathPlugin } from "gsap/all";
 import { AdditiveBlending, Vector3 } from "three";
 import { handleUserEvent, welcomeAnimation } from "./controller";
 import { sceneCameraPosition } from "./configuration";
-import { renderModel } from "./utils";
+import { addMirror, rendercube, renderModel } from "./utils";
 import { Reflector } from "./Reflections";
 gsap.registerPlugin(MotionPathPlugin);
 
@@ -22,9 +29,16 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
+const pointLight = new THREE.PointLight( 0xffffff, 100 );
+camera.add( pointLight );
+
+const listener = new THREE.AudioListener();
+camera.add(listener);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+// renderer.toneMapping = THREE.ReinhardToneMapping;
+
 document.body.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -38,98 +52,67 @@ controls.minPolarAngle = Math.PI * 0.2;
 controls.maxPolarAngle = Math.PI * 0.5;
 // controls.enableZoom = false
 
-var model = renderModel(scene);
 
-const geometry = new THREE.CircleGeometry(25, 5);
 
-//adding the reflection mirror
-const groundMirror = new Reflector(geometry, {
-  clipBias: 0.003,
-  textureWidth: window.innerWidth,
-  textureHeight: window.innerHeight,
-  color: 0x777777,
+const params = {
+    threshold: 2,
+    strength: 4,
+    radius: 10,
+    exposure: 4
+};
+
+
+scene.add( new THREE.AmbientLight( 0xcccccc ) );
+
+
+const renderScene = new RenderPass( scene, camera );
+
+const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.6, 1, 1 );
+bloomPass.threshold = params.threshold;
+bloomPass.strength = params.strength;
+bloomPass.radius = params.radius;
+bloomPass.exposure = params.exposure
+
+
+const composer = new EffectComposer( renderer );
+composer.addPass( renderScene );
+composer.addPass( bloomPass );
+
+
+const sound = new Howl({
+  src: ["model/desktop.mp3"],
+  volume: 0.09
 });
-groundMirror.position.y = -0.2;
-groundMirror.material.transparent = true;
-groundMirror.material.uniforms.opacity.value = 0.1;
-groundMirror.rotateX(-Math.PI / 2);
-scene.background = new THREE.Color("darkgrey");
-scene.add(groundMirror);
+  // Example: Set volume to half
+sound.play();
+
+renderModel(scene);
+// rendercube(scene)
+
+addMirror(scene)
 
 //entry animation
-welcomeAnimation(camera, sceneCameraPosition);
+welcomeAnimation(camera, controls, sceneCameraPosition);
 //handling all user action inside
-handleUserEvent(camera, scene, controls);
+handleUserEvent(camera, scene, controls,listener);
 
-//adding text layer
-const loader = new FontLoader();
-
-var object = scene.getObjectByName( "Box-aboutme", true );
-console.log("scene" ,object )
+// const axesHelper = new THREE.AxesHelper( 5 );
+// scene.add( axesHelper );
 
 
-
-const axesHelper = new THREE.AxesHelper( 5 );
-scene.add( axesHelper );
-
-loader.load("model/Open_Sans_Regular.json", function (font) {
-  const color = 0x006699;
-
-  const matLite = new THREE.MeshBasicMaterial({
-    color: color,
-    transparent: false,
-    opacity: 0.4,
-    // side: THREE.DoubleSide,
-  });
-
-  const message = "About Me";
-
-//   const shapes = font.generateShapes(message, 100);
-//   const geometry = new THREE.ShapeGeometry(shapes);
-const geometry = new TextGeometry(message ,{
-    font : font,
-    size : 6,
-    depth: 2,
-})
-
-  geometry.computeBoundingBox();
-
-  const xMid = -0.5 * (geometry.boundingBox.max.x - geometry.boundingBox.min.x);
-
-  geometry.translate(xMid, 0, 0);
-  geometry.scale(0.01,0.01,0.01)
-
-  // make shape ( N.B. edge view not visible )
-
-  const text = new THREE.Mesh(geometry, matLite);
-  text.position.copy(new Vector3(1,1,1));
-//   console.log("box lyer position " ,boxlayer.position)
-  text.rotation.y = Math.PI/2
-
-//   text.rotation.x = Math.PI * 0.5
-
-
-  
-  scene.add(text);
-});
+// renderer.toneMapping =THREE.LinearToneMapping
+// renderer.toneMappingExposure = 3
 
 function animate() {
-  //     renderer.setRenderTarget(reflectionRenderTarget);
-  // renderer.clear();
-  // reflectionCamera.position.copy(model.position); // Replace with position of reflective object
-  // const reflectionMatrix = new THREE.Matrix4().copy(model.matrixWorld).multiply(
-  //   new THREE.Matrix4().makeScale(-1, 1, 1) // Flip Y-axis for correct reflection
-  // );
-  // reflectionCamera.matrixWorld.copy(reflectionMatrix);
-  // reflectionCamera.updateMatrixWorld(true);
+  composer.render();
 
   requestAnimationFrame(animate);
   controls.update();
-  TWEEN.update();
   // const cameraPosition = controls.object.position.clone(); // Get a copy of the camera position
   // console.log("Camera Position:", cameraPosition.x, cameraPosition.y, cameraPosition.z);
 
   renderer.render(scene, camera);
+
 }
 
 animate();
