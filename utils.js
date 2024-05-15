@@ -138,7 +138,7 @@ const groundMirror = new Reflector(geometry, {
 });
 groundMirror.position.y = -0.2;
 groundMirror.material.transparent = true;
-groundMirror.material.uniforms.opacity.value = 0.1;
+groundMirror.material.uniforms.opacity.value = 0.3;
 groundMirror.rotateX(-Math.PI / 2);
 scene.background = new THREE.Color("#747775");
 scene.add(groundMirror);
